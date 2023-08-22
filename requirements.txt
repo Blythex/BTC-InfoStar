@@ -1,0 +1,19 @@
+colorama==0.4.6
+hmac
+struct
+hashlib
+bit==0.8.0
+mnemonic==0.20
+bip-utils==2.7.1
+json
+random
+secrets
+tqdm==4.66.1
+os
+shutil
+datetime
+io
+sys
+psutil  # Dieses Paket fehlt in Ihrem `pip freeze`, daher keine genaue Version angegeben.
+enum
+simplebloomfilter==1.0.0
