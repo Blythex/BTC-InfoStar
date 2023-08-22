@@ -29,7 +29,7 @@ BTC InfoStar is a versatile Python tool designed to simplify the generation, pro
 
 Creating and refining BTC InfoStar has been a journey of dedication and learning. It's been weeks of effort and countless iterations to bring this tool to life. I'm thrilled to share it with the community and hope it proves valuable to fellow Bitcoin enthusiasts, developers, and researchers.
 
-I would like to extend a special thanks to [Mizogg](https://github.com/GitHubUsername) for their invaluable assistance and contributions to this project. Your insights and expertise have greatly shaped BTC InfoStar.
+I would like to extend a special thanks to [Mizogg](https://github.com/GitHubUsername) for their invaluable assistance and contributions to this project. Your insights and expertise have greatly shaped BTC InfoStar. Additionally, I want to express my deep appreciation to [Iceland2k14](https://github.com/iceland2k14) for their exceptional work on the [secp256k1](https://github.com/iceland2k14/secp256k1) library that forms the foundation of this tool.
 
 ## Contribution
 
