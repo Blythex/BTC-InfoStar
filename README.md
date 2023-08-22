@@ -25,6 +25,8 @@ BTC InfoStar is a versatile Python tool designed to simplify the generation, pro
    - Before using options 1 and 3, you need to convert your hexadecimal private key to an integer in option 2, which you can then use in options 1 and 3.
 3. Follow the on-screen prompts to generate, analyze, and store Bitcoin key data.
 
+**Note:** Ensure that the `btc.bf` file is present in the same directory as `btc_infostar.py`.
+
 ## Personal Note
 
 Creating and refining BTC InfoStar has been a journey of dedication and learning. It's been weeks of effort and countless iterations to bring this tool to life. I'm thrilled to share it with the community and hope it proves valuable to fellow Bitcoin enthusiasts, developers, and researchers.
