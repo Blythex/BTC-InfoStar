@@ -45,3 +45,27 @@ If you find BTC InfoStar useful, consider making a donation:
 ## License
 
 BTC InfoStar is open-source software released under the [MIT License](LICENSE).
+
+## Required Repositories
+
+To run the BTC InfoStar tool, the following Python packages are required:
+
+- colorama==0.4.6
+- hmac
+- struct
+- hashlib
+- bit==0.8.0
+- mnemonic==0.20
+- bip-utils==2.7.1
+- json
+- random
+- secrets
+- tqdm==4.66.1
+- os
+- shutil
+- datetime
+- io
+- sys
+- psutil  # The version of this package is not specified in your `pip freeze`.
+- enum
+- simplebloomfilter==1.0.0
