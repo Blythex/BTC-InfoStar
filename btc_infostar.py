@@ -85,18 +85,22 @@ def save_to_file(data, prefix="data", extension="json"):
     
     return filename
 
-def get_key_data(private_key_int):
+def get_key_data(private_key_int, ice, bloom_filterbtc):
     global found_addresses_count
     
     # Perform scalar multiplication to get the corresponding public key
     public_key_bytes = ice.scalar_multiplication(private_key_int)
 
-    # Convert bytes to hexadecimal string
-    public_key_hex = public_key_bytes.hex()
+    # The public_key_bytes already represents the uncompressed public key
+    uncompressed_public_key_hex = public_key_bytes.hex()
 
     # Extract x and y coordinates from the public key
     x_coord = public_key_bytes[1:33].hex()
     y_coord = public_key_bytes[33:].hex()
+
+    # Determine the prefix for the compressed public key based on the parity of y-coordinate
+    prefix = "02" if int(y_coord, 16) % 2 == 0 else "03"
+    compressed_public_key_hex = prefix + x_coord
 
     # Convert the private key to hexadecimal with leading zeros
     private_key_hex = format(private_key_int, '064x')
@@ -123,7 +127,8 @@ def get_key_data(private_key_int):
         "ethereum_address": eth_address_pvk,
         "private_key_int": private_key_int,
         "private_key_hex": "0x" + private_key_hex,
-        "public_key": public_key_hex,
+        "public_key_compressed": compressed_public_key_hex,
+        "public_key_uncompressed": uncompressed_public_key_hex,
         "x_coord": x_coord,
         "y_coord": y_coord,
         "wif_compressed": wif_compressed,
@@ -592,7 +597,7 @@ def display_menu():
                                                                    
 Author : NixName420
 https://github.com/NixName420/
-Version : 1.0.0
+Version : 1.0.5
 Donation BTC : bc1qtkxuklcps9tf8hmgy8l62f5k8h3v2myduea68k
 Donation ETH : 0x75c89c885CcddD181feaFA272351C87005CE7Afb
 """
@@ -623,202 +628,401 @@ def main():
     choice = display_menu()
 
     if choice == 1:
-        start = int(input(Fore.BLUE + "Enter the starting value (default is 1): ") or 1)
-        end = int(input(Fore.BLUE + f"Enter the ending value (default is {MAX_PRIVATE_KEY}): ") or MAX_PRIVATE_KEY)
-        show_progress = input(Fore.BLUE + "Do you want to display the progress bar? (y/n): ").lower() == 'y'
-        private_keys = generate_sequential_keys(start, end)
+        try:
+            print(Fore.YELLOW + "Type 'back' to return to the main menu at any time." + Fore.RESET)
+            
+            start = input(Fore.BLUE + "Enter the starting value (default is 1): ")
+            
+            if start.lower() == 'back':
+                print(Fore.YELLOW + "Returning to the main menu..." + Fore.RESET)
+                main()
+                return
 
-        file_idx = 1
-        current_file_name = f"sequential_key_data_{file_idx}.json"
-        temp_buffer = io.StringIO()  # Create a temporary buffer
-        temp_buffer.write("[\n")
+            start = int(start or 1)
+            
+            end = input(Fore.BLUE + f"Enter the ending value (default is {MAX_PRIVATE_KEY}): ")
+            
+            if end.lower() == 'back':
+                print(Fore.YELLOW + "Returning to the main menu..." + Fore.RESET)
+                main()
+                return
 
-        def flush_to_file():
-            nonlocal current_file_name
+            end = int(end or MAX_PRIVATE_KEY)
+            
+            show_progress = input(Fore.BLUE + "Do you want to display the progress bar? (y/n): ").lower() == 'y'
+            private_keys = generate_sequential_keys(start, end)
 
-            with open(current_file_name, "a") as file:
-                temp_content = temp_buffer.getvalue()
-                file.write(temp_content)
-                temp_buffer.seek(0)  # Reset the buffer for new content
-                temp_buffer.truncate(0)
+            file_idx = 1
+            current_file_name = f"sequential_key_data_{file_idx}.json"
+            temp_buffer = io.StringIO()  # Create a temporary buffer
+            temp_buffer.write("[\n")
 
-            # Check if file size exceeds MAX_FILE_SIZE
-            if os.path.getsize(current_file_name) > MAX_FILE_SIZE:
-                # Close current bracket for JSON
+            def flush_to_file():
+                nonlocal current_file_name
                 with open(current_file_name, "a") as file:
-                    file.write("\n]")
+                    temp_content = temp_buffer.getvalue()
+                    file.write(temp_content)
+                    temp_buffer.seek(0)  # Reset the buffer for new content
+                    temp_buffer.truncate(0)
 
-                # Start a new file
-                nonlocal file_idx
-                file_idx += 1
-                current_file_name = f"sequential_key_data_{file_idx}.json"
-                with open(current_file_name, "w") as file:
-                    file.write("[\n")
+                # Check if file size exceeds MAX_FILE_SIZE
+                if os.path.getsize(current_file_name) > MAX_FILE_SIZE:
+                    # Close current bracket for JSON
+                    with open(current_file_name, "a") as file:
+                        file.write("\n]")
 
-        generated_count = 0
-        start_time = datetime.now()
+                    # Start a new file
+                    nonlocal file_idx
+                    file_idx += 1
+                    current_file_name = f"sequential_key_data_{file_idx}.json"
+                    with open(current_file_name, "w") as file:
+                        file.write("[\n")
 
-        for pk in private_keys:
-            generated_count += 1
-            elapsed_time = datetime.now() - start_time
-            data = get_key_data(pk)
-            data_str = json.dumps(data, indent=4)
+            generated_count = 0
+            start_time = datetime.now()
 
-            if generated_count != 1:  # Add comma for subsequent entries
-                temp_buffer.write(",\n")
-            temp_buffer.write(data_str)
+            for pk in private_keys:
+                generated_count += 1
+                elapsed_time = datetime.now() - start_time
+                data = get_key_data(pk, ice, bloom_filterbtc)
+                data_str = json.dumps(data, indent=4)
 
-            # Regularly flush the content from the temp buffer to the file
-            if generated_count % 100 == 0:  # Adjust this value as needed for more frequent saves
-                flush_to_file()
+                if generated_count != 1:  # Add comma for subsequent entries
+                    temp_buffer.write(",\n")
+                temp_buffer.write(data_str)
 
-            if show_progress:
-                display_progress(found_addresses_count, elapsed_time, generated_count)
+                # Regularly flush the content from the temp buffer to the file
+                if generated_count % 100 == 0:  # Adjust this value as needed for more frequent saves
+                    flush_to_file()
 
-        # Close the final file after writing the last entry
-        temp_buffer.write("\n]")
-        flush_to_file()
-        temp_buffer.close()
-        print(Fore.CYAN + f"\nData has been saved in {current_file_name}.")
+                if show_progress:
+                    display_progress(found_addresses_count, elapsed_time, generated_count)
+
+            # Close the final file after writing the last entry
+            temp_buffer.write("\n]")
+            flush_to_file()
+            temp_buffer.close()
+            print(Fore.CYAN + f"\nData has been saved in {current_file_name}.")
+
+        except KeyboardInterrupt:
+            # When the user interrupts the process
+            print(Fore.RED + "\nUser interrupted the process.")
+            # Save the data that has been generated up to this point
+            flush_to_file()
+            print(Fore.CYAN + f"\nData has been saved in {current_file_name}.")
+            # Return to the main menu
+            main()
 
     elif choice == 2:
-        hex_value = input(Fore.BLUE + "Enter the hexadecimal value: ")
-        int_value = hex_to_int(hex_value)
-        print(Fore.CYAN + f"The integer value of the hexadecimal {hex_value} is {int_value}")
+        try:
+            hex_value = input(Fore.BLUE + "Enter the hexadecimal value (or type 'back' to return to the main menu): ")
+            
+            if hex_value.lower() == 'back':
+                print(Fore.YELLOW + "Returning to the main menu..." + Fore.RESET)
+                main()
+                return
+
+            int_value = hex_to_int(hex_value)
+                
+            max_int_value = 115792089237316195423570985008687907852837564279074904382605163141518161494337
+
+            if int_value > max_int_value:
+                print(Fore.RED + f"Error: The integer value {int_value} exceeds the maximum allowed value!")
+            else:
+                print(Fore.CYAN + f"The integer value of the hexadecimal {hex_value} is {int_value}")
+
+        except KeyboardInterrupt:
+            # Wenn der Benutzer den Prozess unterbricht
+            print(Fore.RED + "\nUser interrupted the process.")
+            # Zum Hauptmenü zurückkehren
+            main()
+
+
+
 
     elif choice == 3:
-        start = int(input(Fore.BLUE + "Enter the starting value (default is 1): ") or 1)
-        end = int(input(Fore.BLUE + f"Enter the ending value (default is {MAX_PRIVATE_KEY}): ") or MAX_PRIVATE_KEY)
-        num_keys = end - start + 1
-        show_progress = input(Fore.BLUE + "Do you want to display the progress bar? (y/n): ").lower() == 'y'
+        try:
+            print(Fore.YELLOW + "Type 'back' to return to the main menu at any time." + Fore.RESET)
+            
+            start = input(Fore.BLUE + "Enter the starting value (default is 1): ")
+            
+            if start.lower() == 'back':
+                print(Fore.YELLOW + "Returning to the main menu..." + Fore.RESET)
+                main()
+                return
 
-        file_idx = 1
-        current_file_name = f"random_key_data_{file_idx}.json"
-        temp_buffer = io.StringIO()  # Create a temporary buffer
-        temp_buffer.write("[\n")
+            start = int(start or 1)
+            
+            end = input(Fore.BLUE + f"Enter the ending value (default is {MAX_PRIVATE_KEY}): ")
+            
+            if end.lower() == 'back':
+                print(Fore.YELLOW + "Returning to the main menu..." + Fore.RESET)
+                main()
+                return
+            
+            end = int(end or MAX_PRIVATE_KEY)
+            
+            num_keys = end - start + 1
+            show_progress = input(Fore.BLUE + "Do you want to display the progress bar? (y/n): ").lower() == 'y'
 
-        def flush_to_file():
-            nonlocal current_file_name
+            file_idx = 1
+            current_file_name = f"random_key_data_{file_idx}.json"
+            temp_buffer = io.StringIO()  # Create a temporary buffer
+            temp_buffer.write("[\n")
 
-            with open(current_file_name, "a") as file:
-                temp_content = temp_buffer.getvalue()
-                file.write(temp_content)
-                temp_buffer.seek(0)  # Reset the buffer for new content
-                temp_buffer.truncate(0)
+            def flush_to_file():
+                nonlocal current_file_name
 
-            # Check if file size exceeds MAX_FILE_SIZE
-            if os.path.getsize(current_file_name) > MAX_FILE_SIZE:
-                # Close current bracket for JSON
                 with open(current_file_name, "a") as file:
-                    file.write("\n]")
+                    temp_content = temp_buffer.getvalue()
+                    file.write(temp_content)
+                    temp_buffer.seek(0)  # Reset the buffer for new content
+                    temp_buffer.truncate(0)
 
-                # Start a new file
-                nonlocal file_idx
-                file_idx += 1
-                current_file_name = f"random_key_data_{file_idx}.json"
-                with open(current_file_name, "w") as file:
-                    file.write("[\n")
+                # Check if file size exceeds MAX_FILE_SIZE
+                if os.path.getsize(current_file_name) > MAX_FILE_SIZE:
+                    # Close current bracket for JSON
+                    with open(current_file_name, "a") as file:
+                        file.write("\n]")
 
-        generated_count = 0
-        start_time = datetime.now()
+                    # Start a new file
+                    nonlocal file_idx
+                    file_idx += 1
+                    current_file_name = f"random_key_data_{file_idx}.json"
+                    with open(current_file_name, "w") as file:
+                        file.write("[\n")
 
-        for i in range(num_keys):
-            generated_count += 1
-            elapsed_time = datetime.now() - start_time
+            generated_count = 0
+            start_time = datetime.now()
 
-            pk = generate_random_key(start, end)
-            data = get_key_data(pk)
-            data_str = json.dumps(data, indent=4)
+            for i in range(num_keys):
+                generated_count += 1
+                elapsed_time = datetime.now() - start_time
 
-            if generated_count != 1:  # Add comma for subsequent entries
-                temp_buffer.write(",\n")
-            temp_buffer.write(data_str)
+                pk = generate_random_key(start, end)
+                data = get_key_data(pk)
+                data_str = json.dumps(data, indent=4)
 
-            # Regularly flush the content from the temp buffer to the file
-            if generated_count % 100 == 0:  # Adjust this value as needed for more frequent saves
-                flush_to_file()
+                if generated_count != 1:  # Add comma for subsequent entries
+                    temp_buffer.write(",\n")
+                temp_buffer.write(data_str)
 
-            if show_progress:
-                display_progress(found_addresses_count, elapsed_time, generated_count)
+                # Regularly flush the content from the temp buffer to the file
+                if generated_count % 100 == 0:  # Adjust this value as needed for more frequent saves
+                    flush_to_file()
 
-        # Close the final file after writing the last entry
-        temp_buffer.write("\n]")
-        flush_to_file()
-        temp_buffer.close()
-        print(Fore.CYAN + f"\nRandom key data has been saved in {current_file_name}.")
+                if show_progress:
+                    display_progress(found_addresses_count, elapsed_time, generated_count)
+
+            # Close the final file after writing the last entry
+            temp_buffer.write("\n]")
+            flush_to_file()
+            temp_buffer.close()
+            print(Fore.CYAN + f"\nRandom key data has been saved in {current_file_name}.")
+
+        except KeyboardInterrupt:
+            # Wenn der Benutzer den Prozess unterbricht
+            print(Fore.RED + "\nUser interrupted the process.")
+            # Zum Hauptmenü zurückkehren
+            main()
 
     elif choice == 4:
-        strength = get_mnemonic_strength()
-        num_keys = int(input(Fore.BLUE + "Enter the number of mnemonics to generate: "))
+        try:
+            print(Fore.YELLOW + "Type 'back' to return to the main menu at any time." + Fore.RESET)
+            
+            strength = get_mnemonic_strength()
+            
+            num_keys_input = input(Fore.BLUE + "Enter the number of mnemonics to generate: ")
+            
+            if num_keys_input.lower() == 'back':
+                print(Fore.YELLOW + "Returning to the main menu..." + Fore.RESET)
+                main()
+                return
+            
+            num_keys = int(num_keys_input)
 
-        # Show progress bar for mnemonic generation
-        show_progress = input(Fore.BLUE + "Do you want to display the progress bar? (y/n): ").lower() == 'y'
+            # Show progress bar for mnemonic generation
+            show_progress_input = input(Fore.BLUE + "Do you want to display the progress bar? (y/n): ")
+            
+            if show_progress_input.lower() == 'back':
+                print(Fore.YELLOW + "Returning to the main menu..." + Fore.RESET)
+                main()
+                return
+            
+            show_progress = show_progress_input.lower() == 'y'
 
-        # Start the timer
-        start_time = datetime.now()
+            # Start the timer
+            start_time = datetime.now()
 
-        # Initialize the list to store generated key data
-        generated_key_data_list = []
+            # Initialize the list to store generated key data
+            generated_key_data_list = []
 
-        # Initialize the progress counter
-        generated_count = 0
+            # Initialize the progress counter
+            generated_count = 0
 
-        for derived_keys in generate_random_mnemonics_and_keys(num_keys, strength // 32 * 3):
-            for key_data in derived_keys:
-                generated_key_data_list.append(key_data)
+            for derived_keys in generate_random_mnemonics_and_keys(num_keys, strength // 32 * 3):
+                for key_data in derived_keys:
+                    generated_key_data_list.append(key_data)
 
-                # Increment the progress counter
-                generated_count += 1
+                    # Increment the progress counter
+                    generated_count += 1
 
-                # Save the generated key data
-                save_to_file(key_data, prefix="mnemonic_key_data")
+                    # Save the generated key data
+                    save_to_file(key_data, prefix="mnemonic_key_data")
 
-            # Display progress if requested
-            if show_progress:
-                elapsed_time = datetime.now() - start_time
-                display_progress(found_addresses_count, elapsed_time, generated_count)
+                # Display progress if requested
+                if show_progress:
+                    elapsed_time = datetime.now() - start_time
+                    display_progress(found_addresses_count, elapsed_time, generated_count)
 
-        # Display completion message
-        elapsed_time = datetime.now() - start_time
-        print(Fore.CYAN + f"\nGenerated {generated_count} mnemonic key data entries in {elapsed_time}.")
+            # Display completion message
+            elapsed_time = datetime.now() - start_time
+            print(Fore.CYAN + f"\nGenerated {generated_count} mnemonic key data entries in {elapsed_time}.")
+
+        except KeyboardInterrupt:
+            # Wenn der Benutzer den Prozess unterbricht
+            print(Fore.RED + "\nUser interrupted the process.")
+            # Zum Hauptmenü zurückkehren
+            main()
 
 
     elif choice == 5:
-        file_name = input(Fore.BLUE + "Enter the name of the file to be sorted: ")
-        sort_data_by_hex(file_name)
+        try:
+            print(Fore.YELLOW + "Type 'back' to return to the main menu at any time." + Fore.RESET)
+            
+            file_name = input(Fore.BLUE + "Enter the name of the file to be sorted: ")
+            
+            if file_name.lower() == 'back':
+                print(Fore.YELLOW + "Returning to the main menu..." + Fore.RESET)
+                main()
+                return
+            
+            sort_data_by_hex(file_name)
+            
+        except KeyboardInterrupt:
+            # Wenn der Benutzer den Prozess unterbricht
+            print(Fore.RED + "\nUser interrupted the process.")
+            # Zum Hauptmenü zurückkehren
+            main()
 
     elif choice == 6:
-        file_name = input(Fore.BLUE + "Enter the name of the file to be sorted: ")
-        sort_data_by_int(file_name)
+        try:
+            print(Fore.YELLOW + "Type 'back' to return to the main menu at any time." + Fore.RESET)
+            
+            file_name = input(Fore.BLUE + "Enter the name of the file to be sorted: ")
+            
+            if file_name.lower() == 'back':
+                print(Fore.YELLOW + "Returning to the main menu..." + Fore.RESET)
+                main()
+                return
+            
+            sort_data_by_int(file_name)
+            
+        except KeyboardInterrupt:
+            # Wenn der Benutzer den Prozess unterbricht
+            print(Fore.RED + "\nUser interrupted the process.")
+            # Zum Hauptmenü zurückkehren
+            main()
 
     elif choice == 7:
-        file_name = input(Fore.BLUE + "Enter the name of the file to be sorted: ")
-        sort_data_by_wif(file_name)
+        try:
+            print(Fore.YELLOW + "Type 'back' to return to the main menu at any time." + Fore.RESET)
+            
+            file_name = input(Fore.BLUE + "Enter the name of the file to be sorted: ")
+            
+            if file_name.lower() == 'back':
+                print(Fore.YELLOW + "Returning to the main menu..." + Fore.RESET)
+                main()
+                return
+            
+            sort_data_by_wif(file_name)
+            
+        except KeyboardInterrupt:
+            # Wenn der Benutzer den Prozess unterbricht
+            print(Fore.RED + "\nUser interrupted the process.")
+            # Zum Hauptmenü zurückkehren
+            main()
 
     elif choice == 8:
-        file_name = input(Fore.BLUE + "Enter the name of the file to be sorted: ")
-        sort_data_by_mnemonic(file_name)
+        try:
+            print(Fore.YELLOW + "Type 'back' to return to the main menu at any time." + Fore.RESET)
+            
+            file_name = input(Fore.BLUE + "Enter the name of the file to be sorted: ")
+            
+            if file_name.lower() == 'back':
+                print(Fore.YELLOW + "Returning to the main menu..." + Fore.RESET)
+                main()
+                return
+            
+            sort_data_by_mnemonic(file_name)
+            
+        except KeyboardInterrupt:
+            # Wenn der Benutzer den Prozess unterbricht
+            print(Fore.RED + "\nUser interrupted the process.")
+            # Zum Hauptmenü zurückkehren
+            main()
 
     elif choice == 9:
-        start_pub_key = input(Fore.BLUE + "Enter the starting value of the public key: ")
-        end_pub_key = input(Fore.BLUE + "Enter the ending value of the public key: ")
-        show_progress = input(Fore.BLUE + "Do you want to display the progress bar? (y/n): ").lower() == 'y'
+        try:
+            print(Fore.YELLOW + "Note: Ensure that both the start and end public keys are either both compressed or both uncompressed." + Fore.RESET)
+            print(Fore.YELLOW + "Compressed keys start with '02' or '03' and have a length of 66 characters. Uncompressed keys start with '04' and have a length of 130 characters." + Fore.RESET)
+            print(Fore.YELLOW + "Type 'back' to return to the main menu at any time." + Fore.RESET)
 
-        keys_data = generate_keys_based_on_public_range_indefinitely(start_pub_key, end_pub_key)
+            valid_start_prefixes = ["02", "03", "04"]
+            valid_lengths = [66, 130]
+            
+            while True:
+                start_pub_key = input(Fore.BLUE + "Enter the starting value of the public key: " + Fore.RESET)
+                
+                if start_pub_key.lower() == 'back':
+                    print(Fore.YELLOW + "Returning to the main menu..." + Fore.RESET)
+                    main()
+                    return
+                
+                end_pub_key = input(Fore.BLUE + "Enter the ending value of the public key: " + Fore.RESET)
+                
+                if end_pub_key.lower() == 'back':
+                    print(Fore.YELLOW + "Returning to the main menu..." + Fore.RESET)
+                    main()
+                    return
 
-        start_time = datetime.now()
-        matches_found = 0
-        generated_count = 0
+                if (start_pub_key[:2] in valid_start_prefixes and len(start_pub_key) in valid_lengths) and (end_pub_key[:2] in valid_start_prefixes and len(end_pub_key) in valid_lengths):
+                    break  # Exit the loop if valid public key prefixes are provided
+                else:
+                    print(Fore.RED + "Error: Invalid public key prefix or length. Ensure your public keys start with '02', '03', or '04' and have the correct length." + Fore.RESET)
+                    continue  # Continue the loop for another input
+            
+            # Determine if the public keys provided are compressed or uncompressed based on their length
+            is_compressed_start = len(start_pub_key) == 66
+            is_compressed_end = len(end_pub_key) == 66
+            
+            if is_compressed_start != is_compressed_end:
+                print(Fore.RED + "Error: Both the start and end values must either be both compressed or both uncompressed." + Fore.RESET)
+                return
+            
+            show_progress = input(Fore.BLUE + "Do you want to display the progress bar? (y/n): ").lower() == 'y'
+            
+            keys_data = generate_keys_based_on_public_range_indefinitely(start_pub_key, end_pub_key, is_compressed_start)
 
-        if show_progress:
-            for i, data in enumerate(tqdm(keys_data, desc="Generating and saving keys"), start=1):
-                save_to_file(data, prefix="public_key_range_data_indefinite")
-                generated_count += 1
-                elapsed_time = datetime.now() - start_time
-                display_progress(matches_found, elapsed_time, generated_count)
-        else:
-            for i, data in enumerate(keys_data, start=1):
-                save_to_file(data, prefix="public_key_range_data_indefinite")
+            start_time = datetime.now()
+            matches_found = 0
+            generated_count = 0
+
+            if show_progress:
+                for i, data in enumerate(tqdm(keys_data, desc="Generating and saving keys"), start=1):
+                    save_to_file(data, prefix="public_key_range_data_indefinite")
+                    generated_count += 1
+                    elapsed_time = datetime.now() - start_time
+            else:
+                for i, data in enumerate(keys_data, start=1):
+                    save_to_file(data, prefix="public_key_range_data_indefinite")
+
+        except KeyboardInterrupt:
+            # Wenn der Benutzer den Prozess unterbricht
+            print(Fore.RED + "\nUser interrupted the process.")
+            # Zum Hauptmenü zurückkehren
+            main()
+
 
     else:
         print("Ungültige Auswahl. Bitte wählen Sie eine der angegebenen Optionen. 1, 2, 3, 4, 5 oder 6)")
