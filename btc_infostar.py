@@ -628,6 +628,28 @@ def main():
     choice = display_menu()
 
     if choice == 1:
+    
+        def flush_to_file():
+            nonlocal current_file_name
+            with open(current_file_name, "a") as file:
+                temp_content = temp_buffer.getvalue()
+                file.write(temp_content)
+                temp_buffer.seek(0)  # Reset the buffer for new content
+                temp_buffer.truncate(0)
+
+            # Check if file size exceeds MAX_FILE_SIZE
+            if os.path.getsize(current_file_name) > MAX_FILE_SIZE:
+                # Close current bracket for JSON
+                with open(current_file_name, "a") as file:
+                    file.write("\n]")
+
+                # Start a new file
+                nonlocal file_idx
+                file_idx += 1
+                current_file_name = f"sequential_key_data_{file_idx}.json"
+                with open(current_file_name, "w") as file:
+                    file.write("[\n")
+        
         try:
             print(Fore.YELLOW + "Type 'back' to return to the main menu at any time." + Fore.RESET)
             
@@ -656,27 +678,6 @@ def main():
             current_file_name = f"sequential_key_data_{file_idx}.json"
             temp_buffer = io.StringIO()  # Create a temporary buffer
             temp_buffer.write("[\n")
-
-            def flush_to_file():
-                nonlocal current_file_name
-                with open(current_file_name, "a") as file:
-                    temp_content = temp_buffer.getvalue()
-                    file.write(temp_content)
-                    temp_buffer.seek(0)  # Reset the buffer for new content
-                    temp_buffer.truncate(0)
-
-                # Check if file size exceeds MAX_FILE_SIZE
-                if os.path.getsize(current_file_name) > MAX_FILE_SIZE:
-                    # Close current bracket for JSON
-                    with open(current_file_name, "a") as file:
-                        file.write("\n]")
-
-                    # Start a new file
-                    nonlocal file_idx
-                    file_idx += 1
-                    current_file_name = f"sequential_key_data_{file_idx}.json"
-                    with open(current_file_name, "w") as file:
-                        file.write("[\n")
 
             generated_count = 0
             start_time = datetime.now()
