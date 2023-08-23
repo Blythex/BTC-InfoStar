@@ -85,7 +85,7 @@ def save_to_file(data, prefix="data", extension="json"):
     
     return filename
 
-def get_key_data(private_key_int, ice, bloom_filterbtc):
+def get_key_data(private_key_int, is_compressed_start):
     global found_addresses_count
     
     # Perform scalar multiplication to get the corresponding public key
@@ -110,6 +110,17 @@ def get_key_data(private_key_int, ice, bloom_filterbtc):
 
     # Convert the private key to WIF uncompressed format
     wif_uncompressed = ice.btc_pvk_to_wif(private_key_hex, is_compressed=False)
+
+    # Generate different types of addresses based on whether the start key is compressed or uncompressed
+    if is_compressed_start:
+        compressed_address = ice.privatekey_to_address(0, True, private_key_int)
+        uncompressed_address = None  # Uncompressed address is not generated for compressed public keys
+        public_key_used = compressed_public_key_hex
+    else:
+        compressed_address = None  # Compressed address is not generated for uncompressed public keys
+        uncompressed_address = ice.privatekey_to_address(0, False, private_key_int)
+        public_key_used = uncompressed_public_key_hex
+
 
     # Generate different types of addresses
     compressed_address = ice.privatekey_to_address(0, True, private_key_int)
@@ -482,16 +493,21 @@ def generate_keys_based_on_public_range_sampled(start_pub_key, end_pub_key, num_
         if start_pub_key <= current_pub_key <= end_pub_key:
             yield data
 
-def generate_keys_based_on_public_range_indefinitely(start_pub_key, end_pub_key):
+def generate_keys_based_on_public_range_indefinitely(start_pub_key, end_pub_key, is_compressed_start):
     while True:
         # Generate a random private key
         private_key_int = random.randint(1, MAX_PRIVATE_KEY)
-        data = get_key_data(private_key_int)
-        current_pub_key = data["public_key"]
+        data = get_key_data(private_key_int, is_compressed_start)
+        
+        if is_compressed_start:
+            current_pub_key = data["public_key_compressed"]
+        else:
+            current_pub_key = data["public_key_uncompressed"]
 
         # Check if the current public key is within the specified range
         if int(start_pub_key, 16) <= int(current_pub_key, 16) <= int(end_pub_key, 16):
             yield data
+
 
 def get_mnemonic_strength():
     print(Fore.YELLOW + "Choose the mnemonic strength:" + Fore.RESET)
@@ -964,6 +980,28 @@ def main():
             main()
 
     elif choice == 9:
+    
+        def flush_to_file():
+            nonlocal current_file_name
+            with open(current_file_name, "a") as file:
+                temp_content = temp_buffer.getvalue()
+                file.write(temp_content)
+                temp_buffer.seek(0)  # Reset the buffer for new content
+                temp_buffer.truncate(0)
+
+            # Check if file size exceeds MAX_FILE_SIZE
+            if os.path.getsize(current_file_name) > MAX_FILE_SIZE:
+                # Close current bracket for JSON
+                with open(current_file_name, "a") as file:
+                    file.write("\n]")
+
+                # Start a new file
+                nonlocal file_idx
+                file_idx += 1
+                current_file_name = f"public_key_range_data_{file_idx}.json"
+                with open(current_file_name, "w") as file:
+                    file.write("[\n")
+
         try:
             print(Fore.YELLOW + "Note: Ensure that both the start and end public keys are either both compressed or both uncompressed." + Fore.RESET)
             print(Fore.YELLOW + "Compressed keys start with '02' or '03' and have a length of 66 characters. Uncompressed keys start with '04' and have a length of 130 characters." + Fore.RESET)
@@ -974,26 +1012,23 @@ def main():
             
             while True:
                 start_pub_key = input(Fore.BLUE + "Enter the starting value of the public key: " + Fore.RESET)
-                
                 if start_pub_key.lower() == 'back':
                     print(Fore.YELLOW + "Returning to the main menu..." + Fore.RESET)
                     main()
                     return
                 
                 end_pub_key = input(Fore.BLUE + "Enter the ending value of the public key: " + Fore.RESET)
-                
                 if end_pub_key.lower() == 'back':
                     print(Fore.YELLOW + "Returning to the main menu..." + Fore.RESET)
                     main()
                     return
 
                 if (start_pub_key[:2] in valid_start_prefixes and len(start_pub_key) in valid_lengths) and (end_pub_key[:2] in valid_start_prefixes and len(end_pub_key) in valid_lengths):
-                    break  # Exit the loop if valid public key prefixes are provided
+                    break
                 else:
                     print(Fore.RED + "Error: Invalid public key prefix or length. Ensure your public keys start with '02', '03', or '04' and have the correct length." + Fore.RESET)
-                    continue  # Continue the loop for another input
-            
-            # Determine if the public keys provided are compressed or uncompressed based on their length
+                    continue
+                
             is_compressed_start = len(start_pub_key) == 66
             is_compressed_end = len(end_pub_key) == 66
             
@@ -1002,27 +1037,42 @@ def main():
                 return
             
             show_progress = input(Fore.BLUE + "Do you want to display the progress bar? (y/n): ").lower() == 'y'
-            
             keys_data = generate_keys_based_on_public_range_indefinitely(start_pub_key, end_pub_key, is_compressed_start)
 
-            start_time = datetime.now()
-            matches_found = 0
-            generated_count = 0
+            file_idx = 1
+            current_file_name = f"public_key_range_data_{file_idx}.json"
+            temp_buffer = io.StringIO()  # Create a temporary buffer
+            temp_buffer.write("[\n")
 
-            if show_progress:
-                for i, data in enumerate(tqdm(keys_data, desc="Generating and saving keys"), start=1):
-                    save_to_file(data, prefix="public_key_range_data_indefinite")
-                    generated_count += 1
-                    elapsed_time = datetime.now() - start_time
-            else:
-                for i, data in enumerate(keys_data, start=1):
-                    save_to_file(data, prefix="public_key_range_data_indefinite")
+            start_time = datetime.now()
+            generated_count = 0
+            for data in keys_data:
+                generated_count += 1
+                elapsed_time = datetime.now() - start_time
+                data_str = json.dumps(data, indent=4)
+
+                if generated_count != 1:
+                    temp_buffer.write(",\n")
+                temp_buffer.write(data_str)
+
+                if temp_buffer.tell() > 5000:  # adjust for more frequent saves
+                    flush_to_file()
+
+                if show_progress:
+                    display_progress(found_addresses_count, elapsed_time, generated_count)
+
+            temp_buffer.write("\n]")
+            flush_to_file()
+            temp_buffer.close()
+            print(Fore.CYAN + f"\nGenerated keys have been saved in '{current_file_name}'.")
 
         except KeyboardInterrupt:
-            # Wenn der Benutzer den Prozess unterbricht
+            # When the user interrupts the process
             print(Fore.RED + "\nUser interrupted the process.")
-            # Zum Hauptmenü zurückkehren
+            flush_to_file()
+            print(Fore.CYAN + f"\nGenerated keys have been saved in '{current_file_name}'.")
             main()
+
 
 
     else:
