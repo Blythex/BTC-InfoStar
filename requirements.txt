@@ -5,3 +5,4 @@ bip-utils==2.7.1
 tqdm==4.66.1
 psutil  # Dieses Paket fehlt in Ihrem `pip freeze`, daher keine genaue Version angegeben.
 simplebloomfilter==1.0.0
+bitarray==1.9.2
